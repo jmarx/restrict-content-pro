@@ -23,288 +23,295 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 function rcp_process_registration() {
 
-  	if ( isset( $_POST["rcp_register_nonce"] ) && wp_verify_nonce( $_POST['rcp_register_nonce'], 'rcp-register-nonce' ) ) {
+	// check nonce
+	if ( ! ( isset( $_POST["rcp_register_nonce"] ) && wp_verify_nonce( $_POST['rcp_register_nonce'], 'rcp-register-nonce' ) ) ) {
+		return;
+	}
 
-		global $rcp_options, $user_ID;
+	global $rcp_options;
 
-		$full_discount   = false;
-		$subscription_id = isset( $_POST['rcp_level'] ) ? absint( $_POST['rcp_level'] ) : false;
-		$discount        = isset( $_POST['rcp_discount'] ) ? sanitize_text_field( $_POST['rcp_discount'] ) : '';
-		$discount_valid  = false;
-		$price           = number_format( (float) rcp_get_subscription_price( $subscription_id ), 2 );
-		$price           = str_replace( ',', '', $price );
-		$base_price      = $price; // Used for discount calculations later
-		$expiration      = rcp_get_subscription_length( $subscription_id );
-		$subscription    = rcp_get_subscription_details( $subscription_id );
+	$subscription_id = rcp_get_registration()->get_subscription();
+	$discount        = isset( $_POST['rcp_discount'] ) ? sanitize_text_field( $_POST['rcp_discount'] ) : '';
+	$price           = number_format( (float) rcp_get_subscription_price( $subscription_id ), 2 );
+	$price           = str_replace( ',', '', $price );
+	$expiration      = rcp_get_subscription_length( $subscription_id );
+	$subscription    = rcp_get_subscription_details( $subscription_id );
+	$auto_renew      = rcp_registration_is_recurring();
 
-		// get the selected payment method/gateway
-		if( ! isset( $_POST['rcp_gateway'] ) ) {
-			$gateway = 'paypal';
-		} else {
-			$gateway = sanitize_text_field( $_POST['rcp_gateway'] );
-		}
+	// if both today's total and the recurring total are 0, the there is a full discount
+	// if this is not a recurring subscription only check today's total
+	$full_discount = ( $auto_renew ) ? ( rcp_get_registration()->get_total() == 0 && rcp_get_registration()->get_recurring_total() == 0 ) : ( rcp_get_registration()->get_total() == 0 );
 
-		/***********************
-		* validate the form
-		***********************/
+	// get the selected payment method/gateway
+	if( ! isset( $_POST['rcp_gateway'] ) ) {
+		$gateway = 'paypal';
+	} else {
+		$gateway = sanitize_text_field( $_POST['rcp_gateway'] );
+	}
 
-		do_action( 'rcp_before_form_errors', $_POST );
+	/***********************
+	* validate the form
+	***********************/
 
-		$is_ajax   = isset( $_POST['rcp_ajax'] );
+	do_action( 'rcp_before_form_errors', $_POST );
 
-		$user_data = rcp_validate_user_data();
+	$is_ajax   = isset( $_POST['rcp_ajax'] );
 
-		if( ! $subscription_id ) {
-			// no subscription level was chosen
-			rcp_errors()->add( 'no_level', __( 'Please choose a subscription level', 'rcp' ), 'register' );
-		}
+	$user_data = rcp_validate_user_data();
 
-		if( $subscription_id ) {
+	if( ! rcp_is_registration() ) {
+		// no subscription level was chosen
+		rcp_errors()->add( 'no_level', __( 'Please choose a subscription level', 'rcp' ), 'register' );
+	}
 
-			if( $price == 0 && $expiration->duration > 0 && rcp_has_used_trial( $user_data['id'] ) ) {
-				// this ensures that users only sign up for a free trial once
-				rcp_errors()->add( 'free_trial_used', __( 'You may only sign up for a free trial once', 'rcp' ), 'register' );
+	if( $subscription_id && $price == 0 && $expiration->duration > 0 && rcp_has_used_trial( $user_data['id'] ) ) {
+		// this ensures that users only sign up for a free trial once
+		rcp_errors()->add( 'free_trial_used', __( 'You may only sign up for a free trial once', 'rcp' ), 'register' );
+	}
+
+	if( ! empty( $discount ) ) {
+
+		// make sure we have a valid discount
+		if( rcp_validate_discount( $discount, $subscription_id ) ) {
+
+			// check if the user has already used this discount
+			if ( $price > 0 && ! $user_data['need_new'] && rcp_user_has_used_discount( $user_data['id'] , $discount ) && apply_filters( 'rcp_discounts_once_per_user', false ) ) {
+				rcp_errors()->add( 'discount_already_used', __( 'You can only use the discount code once', 'rcp' ), 'register' );
 			}
+
+		} else {
+			// the entered discount code is incorrect
+			rcp_errors()->add( 'invalid_discount', __( 'The discount you entered is invalid', 'rcp' ), 'register' );
 		}
+
+	}
+
+	// Validate extra fields in gateways with the 2.1+ gateway API
+	if( ! has_action( 'rcp_gateway_' . $gateway ) && $price > 0 && ! $full_discount ) {
+
+		$gateways    = new RCP_Payment_Gateways;
+		$gateway_var = $gateways->get_gateway( $gateway );
+		$gateway_obj = new $gateway_var['class'];
+		$gateway_obj->validate_fields();
+	}
+
+	do_action( 'rcp_form_errors', $_POST );
+
+	// retrieve all error messages, if any
+	$errors = rcp_errors()->get_error_messages();
+
+	if ( ! empty( $errors ) && $is_ajax ) {
+		wp_send_json_error( array( 'success' => false, 'errors' => rcp_get_error_messages_html( 'register' ), 'nonce' => wp_create_nonce( 'rcp-register-nonce' ) ) );
+	} elseif( $is_ajax ) {
+		wp_send_json_success( array( 'success' => true ) );
+	}
+
+	// only create the user if there are no errors
+	if( ! empty( $errors ) ) {
+		return;
+	}
+
+	if( $user_data['need_new'] ) {
+
+		$user_data['id'] = wp_insert_user( array(
+				'user_login'		=> $user_data['login'],
+				'user_pass'	 		=> $user_data['password'],
+				'user_email'		=> $user_data['email'],
+				'first_name'		=> $user_data['first_name'],
+				'last_name'			=> $user_data['last_name'],
+				'display_name'      => $user_data['first_name'] . ' ' . $user_data['last_name'],
+				'user_registered'	=> date( 'Y-m-d H:i:s' )
+			)
+		);
+
+	}
+
+	if ( empty( $user_data['id'] ) ) {
+		return;
+	}
+
+	// Setup the member object
+	$member = new RCP_Member( $user_data['id'] );
+
+	update_user_meta( $user_data['id'], '_rcp_new_subscription', '1' );
+
+	$subscription_key = rcp_generate_subscription_key();
+
+	if( ! rcp_is_active( $user_data['id'] ) ) {
+
+		rcp_set_status( $user_data['id'], 'pending' );
+
+		update_user_meta( $user_data['id'], 'rcp_subscription_level', $subscription_id );
+		update_user_meta( $user_data['id'], 'rcp_subscription_key', $subscription_key );
+
+		// Ensure no pending level details are set
+		delete_user_meta( $user_data['id'], 'rcp_pending_subscription_level' );
+		delete_user_meta( $user_data['id'], 'rcp_pending_subscription_key' );
+
+	} else {
+
+		// If the member is already active, we need to set these as pending changes
+		update_user_meta( $user_data['id'], 'rcp_pending_subscription_level', $subscription_id );
+		update_user_meta( $user_data['id'], 'rcp_pending_subscription_key', $subscription_key );
+
+	}
+
+	// Calculate the expiration date for the member
+	$member_expires = $member->calculate_expiration( $auto_renew );
+
+	update_user_meta( $user_data['id'], 'rcp_pending_expiration_date', $member_expires );
+
+	// Set the user's role
+	$role = ! empty( $subscription->role ) ? $subscription->role : 'subscriber';
+	$user = new WP_User( $user_data['id'] );
+	$user->add_role( apply_filters( 'rcp_default_user_level', $role, $subscription_id ) );
+
+	do_action( 'rcp_form_processing', $_POST, $user_data['id'], $price );
+
+	// process a paid subscription
+	if( $price > '0' ) {
 
 		if( ! empty( $discount ) ) {
 
-			if( rcp_validate_discount( $discount, $subscription_id ) ) {
+			$discounts    = new RCP_Discounts();
+			$discount_obj = $discounts->get_by( 'code', $discount );
 
-				$discount_valid = true;
+			// record the usage of this discount code
+			$discounts->add_to_user( $user_data['id'], $discount );
 
-			} else {
+			// incrase the usage count for the code
+			$discounts->increase_uses( $discount_obj->id );
 
-				// the entered discount code is incorrect
-				rcp_errors()->add( 'invalid_discount', __( 'The discount you entered is invalid', 'rcp' ), 'register' );
-
-			}
-
-			if( $discount_valid && $price > 0 ) {
-
-				if( ! $user_data['need_new'] && rcp_user_has_used_discount( $user_data['id'] , $discount ) && apply_filters( 'rcp_discounts_once_per_user', false ) ) {
-
-					$discount_valid = false;
-					rcp_errors()->add( 'discount_already_used', __( 'You can only use the discount code once', 'rcp' ), 'register' );
-				}
-
-				if( $discount_valid ) {
-
-					$discounts    = new RCP_Discounts();
-					$discount_obj = $discounts->get_by( 'code', $discount );
-
-					if( is_object( $discount_obj ) ) {
-						// calculate the after-discount price
-						$discounted_price = $discounts->calc_discounted_price( $base_price, $discount_obj->amount, $discount_obj->unit );
-						if( 0 == $discounted_price ) {
-							$full_discount = true;
-						}
-
-					}
-
-				}
-			
+			// if the discount is 100%, log the user in and redirect to success page
+			if( $full_discount ) {
+				rcp_set_expiration_date( $user_data['id'], $member_expires );
+				rcp_set_status( $user_data['id'], 'active' );
+				rcp_login_user_in( $user_data['id'], $user_data['login'] );
+				wp_redirect( rcp_get_return_url( $user_data['id'] ) ); exit;
 			}
 
 		}
 
-		// Validate extra fields in gateways with the 2.1+ gateway API
-		if( ! has_action( 'rcp_gateway_' . $gateway ) && $price > 0 && ! $full_discount ) {
-		
-			$gateways    = new RCP_Payment_Gateways;
-			$gateway_var = $gateways->get_gateway( $gateway );
-			$gateway_obj = new $gateway_var['class'];
-			$gateway_obj->validate_fields();
+		// Remove trialing status, if it exists
+		delete_user_meta( $user_data['id'], 'rcp_is_trialing' );
+
+		// log the new user in
+		rcp_login_user_in( $user_data['id'], $user_data['login'] );
+
+		$redirect = rcp_get_return_url( $user_data['id'] );
+
+		$subscription_data = array(
+			'price'             => rcp_get_registration()->get_total( true, false ), // get total without the fee
+			'discount'          => rcp_get_registration()->get_total_discounts(),
+			'discount_code'     => $discount,
+			'fee' 			    => rcp_get_registration()->get_total_fees(),
+			'length' 			=> $expiration->duration,
+			'length_unit' 		=> strtolower( $expiration->duration_unit ),
+			'subscription_id'   => $subscription->id,
+			'subscription_name' => $subscription->name,
+			'key' 				=> $subscription_key,
+			'user_id' 			=> $user_data['id'],
+			'user_name' 		=> $user_data['login'],
+			'user_email' 		=> $user_data['email'],
+			'currency' 			=> $rcp_options['currency'],
+			'auto_renew' 		=> $auto_renew,
+			'return_url' 		=> $redirect,
+			'new_user' 			=> $user_data['need_new'],
+			'post_data' 		=> $_POST
+		);
+
+		// if giving the user a credit, make sure the credit does not exceed the first payment
+		if ( $subscription_data['fee'] < 0 && abs( $subscription_data['fee'] ) > $subscription_data['price'] ) {
+			$subscription_data['fee'] = -1 * $subscription_data['price'];
 		}
 
-		do_action( 'rcp_form_errors', $_POST );
+		// send all of the subscription data off for processing by the gateway
+		rcp_send_to_gateway( $gateway, apply_filters( 'rcp_subscription_data', $subscription_data ) );
 
-		// retrieve all error messages, if any
-		$errors = rcp_errors()->get_error_messages();
+	// process a free or trial subscription
+	} else {
 
-		if ( ! empty( $errors ) && $is_ajax ) {
-			wp_send_json_error( array( 'success' => false, 'errors' => rcp_get_error_messages_html( 'register' ), 'nonce' => wp_create_nonce( 'rcp-register-nonce' ) ) );
-		} elseif( $is_ajax ) {
-			wp_send_json_success( array( 'success' => true ) );
-		}
+		// This is a free user registration or trial
+		rcp_set_expiration_date( $user_data['id'], $member_expires );
 
-		// only create the user if there are no errors
-		if( ! empty( $errors ) || $is_ajax ) {
-			return;
+		// if the subscription is a free trial, we need to record it in the user meta
+		if( $member_expires != 'none' ) {
+
+			// activate the user's trial subscription
+			rcp_set_status( $user_data['id'], 'active' );
+
+			// this is so that users can only sign up for one trial
+			update_user_meta( $user_data['id'], 'rcp_has_trialed', 'yes' );
+			update_user_meta( $user_data['id'], 'rcp_is_trialing', 'yes' );
+			rcp_email_subscription_status( $user_data['id'], 'trial' );
+
+		} else {
+
+			// set the user's status to free
+			rcp_set_status( $user_data['id'], 'free' );
+			rcp_email_subscription_status( $user_data['id'], 'free' );
+
 		}
 
 		if( $user_data['need_new'] ) {
 
-			$user_data['id'] = wp_insert_user( array(
-					'user_login'		=> $user_data['login'],
-					'user_pass'	 		=> $user_data['password'],
-					'user_email'		=> $user_data['email'],
-					'first_name'		=> $user_data['first_name'],
-					'last_name'			=> $user_data['last_name'],
-					'display_name'      => $user_data['first_name'] . ' ' . $user_data['last_name'],
-					'user_registered'	=> date( 'Y-m-d H:i:s' )
-				)
-			);
+			if( ! isset( $rcp_options['disable_new_user_notices'] ) ) {
+
+				// send an email to the admin alerting them of the registration
+				wp_new_user_notification( $user_data['id']) ;
+
+			}
+
+			// log the new user in
+			rcp_login_user_in( $user_data['id'], $user_data['login'] );
 
 		}
+		// send the newly created user to the redirect page after logging them in
+		wp_redirect( rcp_get_return_url( $user_data['id'] ) ); exit;
 
-		// Setup the member object
-		$member = new RCP_Member( $user_data['id'] );
+	} // end price check
 
-		if( $user_data['id'] ) {
-
-			// Determine auto renew behavior
-			if( '3' == rcp_get_auto_renew_behavior() && isset( $_POST['rcp_auto_renew'] ) ) {
-
-				$auto_renew = true;
-
-			} elseif( '1' == rcp_get_auto_renew_behavior() ) {
-
-				$auto_renew = true;
-
-			} else {
-
-				$auto_renew = false;
-
-			}
-
-			update_user_meta( $user_data['id'], '_rcp_new_subscription', '1' );
-
-			$subscription_key = rcp_generate_subscription_key();
-
-			if( ! rcp_is_active( $user_data['id'] ) ) {
-
-				rcp_set_status( $user_data['id'], 'pending' );
-
-				update_user_meta( $user_data['id'], 'rcp_subscription_level', $subscription_id );
-				update_user_meta( $user_data['id'], 'rcp_subscription_key', $subscription_key );
-
-				// Ensure no pending level details are set
-				delete_user_meta( $user_data['id'], 'rcp_pending_subscription_level' );
-				delete_user_meta( $user_data['id'], 'rcp_pending_subscription_key' );
-	
-			} else {
-
-				// If the member is already active, we need to set these as pending changes
-				update_user_meta( $user_data['id'], 'rcp_pending_subscription_level', $subscription_id );
-				update_user_meta( $user_data['id'], 'rcp_pending_subscription_key', $subscription_key );
-
-			}
-
-			// Calculate the expiration date for the member
-			$member_expires = $member->calculate_expiration( $auto_renew );
-
-			update_user_meta( $user_data['id'], 'rcp_pending_expiration_date', $member_expires );
-
-			// Set the user's role
-			$role = ! empty( $subscription->role ) ? $subscription->role : 'subscriber';
-			$user = new WP_User( $user_data['id'] );
-			$user->add_role( apply_filters( 'rcp_default_user_level', $role, $subscription_id ) );
-
-			do_action( 'rcp_form_processing', $_POST, $user_data['id'], $price );
-
-			// process a paid subscription
-			if( $price > '0' ) {
-
-				if( ! empty( $discount ) ) {
-
-					// record the usage of this discount code
-					$discounts->add_to_user( $user_data['id'], $discount );
-
-					// incrase the usage count for the code
-					$discounts->increase_uses( $discount_obj->id );
-
-					// if the discount is 100%, log the user in and redirect to success page
-					if( $full_discount ) {
-						rcp_set_expiration_date( $user_data['id'], $member_expires );
-						rcp_set_status( $user_data['id'], 'active' );
-						rcp_login_user_in( $user_data['id'], $user_data['login'] );
-						wp_redirect( rcp_get_return_url( $user_data['id'] ) ); exit;
-					}
-
-				}
-
-				// Remove trialing status, if it exists
-				delete_user_meta( $user_data['id'], 'rcp_is_trialing' );
-
-				// log the new user in
-				rcp_login_user_in( $user_data['id'], $user_data['login'] );
-
-				$redirect = rcp_get_return_url( $user_data['id'] );
-
-				$subscription_data = array(
-					'price'             => ! empty( $discounted_price ) ? $discounted_price : $price,
-					'discount'          => ! empty( $discounted_price ) ? $base_price - $discounted_price : 0,
-					'discount_code'     => $discount,
-					'fee' 			    => ! empty( $subscription->fee ) ? number_format( $subscription->fee, 2 ) : 0,
-					'length' 			=> $expiration->duration,
-					'length_unit' 		=> strtolower( $expiration->duration_unit ),
-					'subscription_id'   => $subscription->id,
-					'subscription_name' => $subscription->name,
-					'key' 				=> $subscription_key,
-					'user_id' 			=> $user_data['id'],
-					'user_name' 		=> $user_data['login'],
-					'user_email' 		=> $user_data['email'],
-					'currency' 			=> $rcp_options['currency'],
-					'auto_renew' 		=> $auto_renew,
-					'return_url' 		=> $redirect,
-					'new_user' 			=> $user_data['need_new'],
-					'post_data' 		=> $_POST
-				);
-
-				// send all of the subscription data off for processing by the gateway
-				rcp_send_to_gateway( $gateway, apply_filters( 'rcp_subscription_data', $subscription_data ) );
-
-			// process a free or trial subscription
-			} else {
-
-				// This is a free user registration or trial
-				rcp_set_expiration_date( $user_data['id'], $member_expires );
-
-				// if the subscription is a free trial, we need to record it in the user meta
-				if( $member_expires != 'none' ) {
-
-					// activate the user's trial subscription
-					rcp_set_status( $user_data['id'], 'active' );
-
-					// this is so that users can only sign up for one trial
-					update_user_meta( $user_data['id'], 'rcp_has_trialed', 'yes' );
-					update_user_meta( $user_data['id'], 'rcp_is_trialing', 'yes' );
-					rcp_email_subscription_status( $user_data['id'], 'trial' );
-
-				} else {
-
-					// set the user's status to free
-					rcp_set_status( $user_data['id'], 'free' );
-					rcp_email_subscription_status( $user_data['id'], 'free' );
-
-				}
-
-				if( $user_data['need_new'] ) {
-
-					if( ! isset( $rcp_options['disable_new_user_notices'] ) ) {
-
-						// send an email to the admin alerting them of the registration
-						wp_new_user_notification( $user_data['id']) ;
-
-					}
-
-					// log the new user in
-					rcp_login_user_in( $user_data['id'], $user_data['login'] );
-
-				}
-				// send the newly created user to the redirect page after logging them in
-				wp_redirect( rcp_get_return_url( $user_data['id'] ) ); exit;
-
-			} // end price check
-
-		} // end if new user id
-
-	} // end nonce check
 }
 add_action( 'init', 'rcp_process_registration', 100 );
 add_action( 'wp_ajax_rcp_process_register_form', 'rcp_process_registration', 100 );
 add_action( 'wp_ajax_nopriv_rcp_process_register_form', 'rcp_process_registration', 100 );
+
+/**
+ * Provide the default registration values when checking out with Stripe Checkout.
+ */
+function rcp_handle_stripe_checkout() {
+
+	if ( isset( $_POST['rcp_ajax'] ) || empty( $_POST['rcp_gateway'] ) || empty( $_POST['stripeEmail'] ) || 'stripe_checkout' !== $_POST['rcp_gateway'] ) {
+		return;
+	}
+
+	if ( empty( $_POST['rcp_user_email'] ) ) {
+		$_POST['rcp_user_email'] = $_POST['stripeEmail'];
+	}
+
+	if ( empty( $_POST['rcp_user_login'] ) ) {
+		$_POST['rcp_user_login'] = $_POST['stripeEmail'];
+	}
+
+	if ( empty( $_POST['rcp_user_first'] ) ) {
+		$user_email = explode( '@', $_POST['rcp_user_email'] );
+		$_POST['rcp_user_first'] = $user_email[0];
+	}
+
+	if ( empty( $_POST['rcp_user_last'] ) ) {
+		$_POST['rcp_user_last'] = '';
+	}
+
+	if ( empty( $_POST['rcp_user_pass'] ) ) {
+		$_POST['rcp_user_pass'] = wp_generate_password();
+	}
+
+	if ( empty( $_POST['rcp_user_pass_confirm'] ) ) {
+		$_POST['rcp_user_pass_confirm'] = $_POST['rcp_user_pass'];
+	}
+
+}
+add_action( 'rcp_before_form_errors', 'rcp_handle_stripe_checkout' );
 
 
 /**
@@ -499,3 +506,268 @@ function rcp_set_pending_subscription_on_upgrade( $status, $user_id ) {
 	}
 }
 add_action( 'rcp_set_status', 'rcp_set_pending_subscription_on_upgrade', 10, 2 );
+
+/**
+ * Determine if this registration is recurring
+ *
+ * @since 2.5
+ * @return bool
+ */
+function rcp_registration_is_recurring() {
+
+	$auto_renew = false;
+
+	if ( '3' == rcp_get_auto_renew_behavior() ) {
+		$auto_renew = isset( $_POST['rcp_auto_renew'] );
+	}
+
+	if ( '1' == rcp_get_auto_renew_behavior() ) {
+		$auto_renew = true;
+	}
+
+	// make sure this gateway supports recurring payments
+	if ( $auto_renew && ! empty( $_POST['rcp_gateway'] ) ) {
+		$auto_renew = rcp_gateway_supports( sanitize_text_field( $_POST['rcp_gateway'] ), 'recurring' );
+	}
+
+	if ( $auto_renew && ! empty( $_POST['rcp_level'] ) ) {
+		$details = rcp_get_subscription_details( $_POST['rcp_level'] );
+
+		// check if this is an unlimited or free subscription
+		if ( empty( $details->duration ) || empty( $details->price ) ) {
+			$auto_renew = false;
+		}
+	}
+
+	return apply_filters( 'rcp_registration_is_recurring', $auto_renew );
+
+}
+
+/**
+ * Add the registration total before the gateway fields
+ *
+ * @since 2.5
+ */
+function rcp_registration_total_field() {
+	?>
+	<div class="rcp_registration_total"></div>
+<?php
+}
+add_action( 'rcp_after_register_form_fields', 'rcp_registration_total_field' );
+
+/**
+ * Get formatted total for this registration
+ *
+ * @since      2.5
+ * @param bool $echo
+ *
+ * @return mixed|string|void
+ */
+function rcp_registration_total( $echo = true ) {
+	$total = rcp_get_registration_total();
+
+	// the registration has not been setup yet
+	if ( false === $total ) {
+		return false;
+	}
+
+	if ( 0 < $total ) {
+		$total = rcp_currency_filter( $total );
+	} else {
+		$total = __( 'free', 'rcp' );
+	}
+
+	$total = apply_filters( 'rcp_registration_total', $total );
+
+	if ( $echo ) {
+		echo $total;
+	}
+
+	return $total;
+}
+
+/**
+ * Get the total for this registration
+ *
+ * @since 2.5
+ *
+ * @return mixed|void
+ */
+function rcp_get_registration_total() {
+
+	if ( ! rcp_is_registration() ) {
+		return false;
+	}
+
+	return rcp_get_registration()->get_total();
+}
+
+/**
+ * Get formatted recurring total for this registration
+ *
+ * @since      2.5
+ * @param bool $echo
+ *
+ * @return mixed|string|void
+ */
+function rcp_registration_recurring_total( $echo = true ) {
+	$total = rcp_get_registration_recurring_total();
+
+	// the registration has not been setup yet
+	if ( false === $total ) {
+		return false;
+	}
+
+	if ( 0 < $total ) {
+		$total = rcp_currency_filter( $total );
+		$subscription = rcp_get_subscription_details( rcp_get_registration()->get_subscription() );
+
+		if ( $subscription->duration == 1 ) {
+			$total .= '/' . $subscription->duration_unit;
+		} else {
+			$total .= sprintf( ' every %s %ss', $subscription->duration, $subscription->duration_unit );
+		}
+	} else {
+		$total = __( 'free', 'rcp' );;
+	}
+
+	$total = apply_filters( 'rcp_registration_recurring_total', $total );
+
+	if ( $echo ) {
+		echo $total;
+	}
+
+	return $total;
+}
+
+/**
+ * Get the recurring total payment
+ *
+ * @since 2.5
+ * @return bool|Int
+ */
+function rcp_get_registration_recurring_total() {
+
+	if ( ! rcp_is_registration() ) {
+		return false;
+	}
+
+	return rcp_get_registration()->get_recurring_total();
+}
+
+/**
+ * Is the registration object setup?
+ *
+ * @since 2.5
+ * @return bool
+ */
+function rcp_is_registration() {
+	return (bool) rcp_get_registration()->get_subscription();
+}
+
+/**
+ * Get the registration object. If it hasn't been setup, setup an empty
+ * registration object.
+ *
+ * @return RCP_Registration
+ */
+function rcp_get_registration() {
+	global $rcp_registration;
+
+	// setup empty registration object if one doesn't exist
+	if ( ! is_a( $rcp_registration, 'RCP_Registration' ) ) {
+		rcp_setup_registration();
+	}
+
+	return $rcp_registration;
+}
+
+/**
+ * Setup the registration object
+ *
+ * Auto setup cart on page load if $_POST parameters are found
+ *
+ * @since      2.5
+ * @param      $level_id
+ * @param null $discount
+ *
+ * @return mixed|void
+ */
+function rcp_setup_registration( $level_id = null, $discount = null ) {
+	global $rcp_registration;
+
+	$rcp_registration = new RCP_Registration( $level_id, $discount );
+	do_action( 'rcp_setup_registration', $level_id, $discount );
+}
+
+/**
+ * Automatically setup the registration object
+ */
+function rcp_setup_registration_init() {
+
+	if ( empty( $_POST['rcp_level'] ) ) {
+		return;
+	}
+
+	$level_id = abs( $_POST['rcp_level'] );
+	$discount = ( empty( $_POST['rcp_discount'] ) ) ? null : sanitize_text_field( $_POST['rcp_discount'] );
+
+	rcp_setup_registration( $level_id, $discount );
+}
+add_action( 'init', 'rcp_setup_registration_init' );
+
+
+/**
+ * Filter levels to only show valid upgrade levels
+ *
+ * @since 2.5
+ * @return mixed|void
+ */
+function rcp_filter_registration_upgrade_levels() {
+
+	remove_filter( 'rcp_get_levels', 'rcp_filter_registration_upgrade_levels' );
+
+	$levels = rcp_get_upgrade_paths();
+
+	add_filter( 'rcp_get_levels', 'rcp_filter_registration_upgrade_levels' );
+
+	return $levels;
+
+}
+
+/**
+ * Hook into registration page and filter upgrade path
+ */
+add_action( 'rcp_before_subscription_form_fields', 'rcp_filter_registration_upgrade_levels' );
+
+/**
+ * Add prorate credit to member registration
+ *
+ * @since 2.5
+ * @param $registration
+ */
+function rcp_add_prorate_fee( $registration ) {
+	if ( ! $amount = rcp_get_member_prorate_credit() ) {
+		return;
+	}
+
+	$registration->add_fee( -1 * $amount, __( 'Proration Credit', 'rcp' ) );
+}
+add_action( 'rcp_registration_init', 'rcp_add_prorate_fee' );
+
+/**
+ * Add message to checkout specifying proration credit
+ *
+ * @since 2.5
+ */
+function rcp_add_prorate_message() {
+	if ( ! $amount = rcp_get_member_prorate_credit() ) {
+		return;
+	}
+
+	$prorate_message = sprintf( '<p>%s</p>', __( 'If you upgrade or downgrade your account, the new subscription will be prorated up to %s for the first payment. Prorated prices are shown below.', 'rcp' ) );
+
+	printf( apply_filters( 'rcp_registration_prorate_message', $prorate_message ), esc_html( rcp_currency_filter( $amount ) ) );
+}
+add_action( 'rcp_before_subscription_form_fields', 'rcp_add_prorate_message' );
+

@@ -146,11 +146,9 @@ $member = new RCP_Member( $member_id );
 				</td>
 			</tr>
 			<tr class="form-field">
-				<th scope="row" valign="top">
-					<?php _e( 'Payments', 'rcp' ); ?>
-				</th>
-				<td>
-					<?php echo rcp_print_user_payments( $member->ID ); ?>
+				<td colspan="2" scope="row" valign="top" style="padding: 20px 10px 20px 0;">
+					<h4><?php _e( 'Payments', 'rcp' ); ?></h4>
+					<?php echo rcp_print_user_payments_formatted( $member->ID ); ?>
 				</td>
 			</tr>
 			<?php do_action( 'rcp_edit_member_after', $member->ID ); ?>

@@ -1,7 +1,7 @@
 <?php
 
 class RCP_WP_Approve_User {
-	
+
 	/**
 	 * Get things started
 	 *
@@ -81,12 +81,15 @@ class RCP_WP_Approve_User {
 	 */
 	public function can_access( $can_access, $member_id, $post_id, $member ) {
 
-		if( $can_access && $this->is_pending( $member_id ) ) {
+		if ( ! rcp_is_restricted_content( $post_id ) ) {
+			return $can_access;
+		}
+
+		if ( $this->is_pending( $member_id ) ) {
 			$can_access = false;
 		}
 
 		return $can_access;
-
 	}
 
 	/**
@@ -96,7 +99,7 @@ class RCP_WP_Approve_User {
 	 * @since   2.4
 	 */
 	public function pending_message( $message ) {
-		
+
 		global $rcp_load_css;
 
 		$rcp_load_css = true;
@@ -228,4 +231,5 @@ class RCP_WP_Approve_User {
 	}
 
 }
+
 new RCP_WP_Approve_User;

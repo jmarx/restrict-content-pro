@@ -1,9 +1,10 @@
 <?php
 
+
 function rcp_admin_scripts( $hook ) {
 
-	global $rcp_options, $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_export_page, $rcp_help_page, $rcp_logs_page;
-	$pages = array( $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_logs_page, $rcp_export_page, $rcp_help_page );
+	global $rcp_options, $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_export_page, $rcp_help_page, $rcp_tools_page, $rcp_logs_page;
+	$pages = array( $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_logs_page, $rcp_export_page, $rcp_tools_page, $rcp_help_page );
 
 	if( in_array( $hook, $pages ) ) {
 		wp_enqueue_script( 'jquery-ui-sortable' );
@@ -38,8 +39,26 @@ function rcp_admin_scripts( $hook ) {
 }
 add_action( 'admin_enqueue_scripts', 'rcp_admin_scripts' );
 
+/**
+ * Sets the URL of the Restrict > Help page
+ *
+ * @access      public
+ * @since       2.5
+ * @return      void
+ */
+function rcp_admin_help_url() {
+?>
+	<script type="text/javascript">
+	jQuery(document).ready(function($) {
+		$('#adminmenu .toplevel_page_rcp-members .wp-submenu-wrap a[href="admin.php?page=rcp-help"]').prop('href', 'http://docs.pippinsplugins.com').prop('target', '_blank');
+	});
+	</script>
+<?php
+}
+add_action( 'admin_head', 'rcp_admin_help_url' );
+
 function rcp_admin_styles( $hook ) {
-	global $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_export_page, $rcp_logs_page, $rcp_help_page;
+	global $rcp_members_page, $rcp_subscriptions_page, $rcp_discounts_page, $rcp_payments_page, $rcp_reports_page, $rcp_settings_page, $rcp_export_page, $rcp_logs_page, $rcp_help_page, $rcp_tools_page;
 	$pages = array(
 		$rcp_members_page,
 		$rcp_subscriptions_page,
@@ -50,6 +69,7 @@ function rcp_admin_styles( $hook ) {
 		$rcp_export_page,
 		$rcp_logs_page,
 		$rcp_help_page,
+		$rcp_tools_page,
 		'post.php',
 		'edit.php',
 		'post-new.php'
@@ -71,9 +91,9 @@ add_action('init', 'rcp_register_css');
 
 // register our front end scripts
 function rcp_register_scripts() {
-	
+
 	global $rcp_options;
-	
+
 	$suffix = ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) ? '' : '.min';
 	wp_register_script( 'rcp-register',  RCP_PLUGIN_URL . 'includes/js/register' . $suffix . '.js', array('jquery'), RCP_PLUGIN_VERSION );
 	wp_register_script( 'jquery-blockui',  RCP_PLUGIN_URL . 'includes/js/jquery.blockUI.js', array('jquery'), RCP_PLUGIN_VERSION );
@@ -106,7 +126,8 @@ function rcp_print_scripts() {
 		array(
 			'ajaxurl'    => admin_url( 'admin-ajax.php' ),
 			'register'   => __( 'Register', 'rcp' ),
-			'pleasewait' => __( 'Please Wait . . . ', 'rcp' )
+			'pleasewait' => __( 'Please Wait . . . ', 'rcp' ),
+			'pay_now'    => __( 'Submit Payment', 'rcp' ),
 		)
 	);
 

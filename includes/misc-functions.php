@@ -606,3 +606,94 @@ function rcp_get_ip() {
 	}
 	return apply_filters( 'rcp_get_ip', $ip );
 }
+
+/**
+ * Checks to see if content is restricted in any way.
+ *
+ * @since 2.5
+ * @param int $post_id The post ID to check for restrictions.
+ * @return bool True if the content is restricted, false if not.
+ */
+function rcp_is_restricted_content( $post_id ) {
+
+	if ( empty( $post_id ) || ! is_numeric( $post_id ) ) {
+		return false;
+	}
+
+	$restricted = false;
+
+	$post_id = absint( $post_id );
+
+	if ( ! $restricted && rcp_is_paid_content( $post_id ) ) {
+		$restricted = true;
+	}
+
+	if ( ! $restricted && rcp_get_content_subscription_levels( $post_id ) ) {
+		$restricted = true;
+	}
+
+	if ( ! $restricted ) {
+		$rcp_user_level = get_post_meta( $post_id, 'rcp_user_level', true );
+		if ( ! empty( $rcp_user_level ) && 'All' !== $rcp_user_level ) {
+			$restricted = true;
+		}
+	}
+
+	if ( ! $restricted ) {
+		$rcp_access_level = get_post_meta( $post_id, 'rcp_access_level', true );
+		if ( ! empty( $rcp_access_level ) && 'None' !== $rcp_access_level ) {
+			$restricted = true;
+		}
+	}
+
+	return apply_filters( 'rcp_is_restricted_content', $restricted, $post_id );
+}
+
+/**
+ * Get RCP Currency
+ *
+ * @since 2.5
+ * @return mixed|void
+ */
+function rcp_get_currency() {
+	global $rcp_options;
+	$currency = isset( $rcp_options['currency'] ) ? strtoupper( $rcp_options['currency'] ) : 'USD';
+	return apply_filters( 'rcp_get_currency', $currency );
+}
+
+/**
+ * Determines if RCP is using a zero-decimal currency
+ *
+ * @param $currency
+ *
+ * @access      public
+ * @since       2.5
+ * @return      bool
+ */
+function rcp_is_zero_decimal_currency( $currency = '' ) {
+
+	if ( ! $currency ) {
+		$currency = strtoupper( rcp_get_currency() );
+	}
+
+	$zero_dec_currencies = array(
+		'BIF',
+		'CLP',
+		'DJF',
+		'GNF',
+		'JPY',
+		'KMF',
+		'KRW',
+		'MGA',
+		'PYG',
+		'RWF',
+		'VND',
+		'VUV',
+		'XAF',
+		'XOF',
+		'XPF'
+	);
+
+	return apply_filters( 'rcp_is_zero_decimal_currency', in_array( $currency, $zero_dec_currencies ) );
+
+}

@@ -207,8 +207,6 @@ jQuery(document).ready(function($) {
 		file_frame.open();
 	});
 
-	$('#adminmenu .toplevel_page_rcp-members .wp-submenu-wrap a[href="admin.php?page=rcp-help"]').prop('href', 'http://docs.pippinsplugins.com').prop('target', '_blank');
-
 	$('#rcp-bulk-select-all').on('change', function() {
 		if( $(this).prop('checked') ) {
 			$('#rcp-members-form .rcp-member-cb').prop('checked', true );

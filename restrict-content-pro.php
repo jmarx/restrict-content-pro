@@ -156,6 +156,7 @@ if( version_compare( PHP_VERSION, '5.3', '<' ) ) {
 	include( RCP_PLUGIN_DIR . 'includes/class-rcp-member.php' );
 	include( RCP_PLUGIN_DIR . 'includes/class-rcp-payments.php' );
 	include( RCP_PLUGIN_DIR . 'includes/class-rcp-discounts.php' );
+	include( RCP_PLUGIN_DIR . 'includes/class-rcp-registration.php' );
 	include( RCP_PLUGIN_DIR . 'includes/scripts.php' );
 	include( RCP_PLUGIN_DIR . 'includes/ajax-actions.php' );
 	include( RCP_PLUGIN_DIR . 'includes/cron-functions.php' );
@@ -168,6 +169,7 @@ if( version_compare( PHP_VERSION, '5.3', '<' ) ) {
 	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateway-paypal-pro.php' );
 	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateway-paypal-express.php' );
 	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateway-stripe.php' );
+	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateway-stripe-checkout.php' );
 	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateway-2checkout.php' );
 	include( RCP_PLUGIN_DIR . 'includes/gateways/class-rcp-payment-gateways.php' );
 	include( RCP_PLUGIN_DIR . 'includes/gateways/gateway-functions.php' );
@@ -202,6 +204,7 @@ if( version_compare( PHP_VERSION, '5.3', '<' ) ) {
 		include( RCP_PLUGIN_DIR . 'includes/admin/reports/reports-page.php' );
 		include( RCP_PLUGIN_DIR . 'includes/admin/export.php' );
 		include( RCP_PLUGIN_DIR . 'includes/admin/logs.php' );
+		include( RCP_PLUGIN_DIR . 'includes/admin/tools/tools-page.php' );
 		include( RCP_PLUGIN_DIR . 'includes/admin/help/help-menus.php' );
 		include( RCP_PLUGIN_DIR . 'includes/admin/metabox.php' );
 		include( RCP_PLUGIN_DIR . 'includes/admin/categories.php' );

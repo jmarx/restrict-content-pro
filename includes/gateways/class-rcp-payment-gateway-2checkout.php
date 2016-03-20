@@ -125,7 +125,7 @@ class RCP_Payment_Gateway_2Checkout extends RCP_Payment_Gateway {
 			if( $charge['response']['responseCode'] == 'APPROVED' ) {
 
 				$payment_data = array(
-					'date'             => date( 'Y-m-d g:i:s', current_time( 'timestamp' ) ),
+					'date'             => date( 'Y-m-d H:i:s', current_time( 'timestamp' ) ),
 					'subscription'     => $this->subscription_name,
 					'payment_type'     => $payment_type,
 					'subscription_key' => $this->subscription_key,
@@ -227,7 +227,7 @@ class RCP_Payment_Gateway_2Checkout extends RCP_Payment_Gateway {
 				case 'RECURRING_INSTALLMENT_SUCCESS' :
 
 					$payment_data = array(
-						'date'             => date( 'Y-m-d g:i:s', strtotime( $_POST['timestamp'], current_time( 'timestamp' ) ) ),
+						'date'             => date( 'Y-m-d H:i:s', strtotime( $_POST['timestamp'], current_time( 'timestamp' ) ) ),
 						'subscription'     => $member->get_subscription_name(),
 						'payment_type'     => sanitize_text_field( $_POST['payment_type'] ),
 						'subscription_key' => $subscription_key,

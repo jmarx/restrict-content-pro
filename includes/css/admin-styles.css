@@ -88,6 +88,13 @@ img.help-image { max-width: 99%; overflow: hidden; border: 1px solid #ccc; }
 #rcp-graphs-date-options,
 #rcp-date-range-options { float: left; }
 #rcp-date-range-options span { float: left; margin-right: 6px; height: 24px; line-height: 24px; }
+/* tools page */
+#rcp-system-info-textarea { width: 800px; height: 400px; font-family: Menlo, Monaco, monospace; white-space: pre; }
+/* tables */
+table.rcp-table { text-align: left; width: 100%; border: none; margin: 0 0 21px; }
+table.rcp-table th,
+table.rcp-table td { text-align: left; border: 1px solid #eee; color: #666; padding: 0.4em; font-size: 90%; word-break: break-all; }
+table.rcp-table th { background: #fafafa; font-weight: bold; }
 
 /* Optimized for 1280px wide (macbooks) and under */
 @media (max-width: 1280px) {

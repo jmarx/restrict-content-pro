@@ -83,6 +83,13 @@ function rcp_process_data() {
 				$level_id   = absint( $_POST['level'] );
 
 				rcp_set_expiration_date( $user->ID, $expiration );
+
+				$new_subscription = get_user_meta( $user->ID, '_rcp_new_subscription', true );
+
+				if ( empty( $new_subscription ) ) {
+					update_user_meta( $user->ID, '_rcp_new_subscription', '1' );
+				}
+
 				rcp_set_status( $user->ID, 'active' );
 
 				update_user_meta( $user->ID, 'rcp_signup_method', 'manual' );
@@ -102,6 +109,7 @@ function rcp_process_data() {
 				} else {
 					delete_user_meta( $user->ID, 'rcp_recurring' );
 				}
+
 				$url = get_bloginfo('wpurl') . '/wp-admin/admin.php?page=rcp-members&rcp_message=user_added';
 				header( "Location:" .  $url);
 
@@ -154,12 +162,6 @@ function rcp_process_data() {
 						case 'mark-cancelled' :
 
 							$member->set_status( 'cancelled' );
-
-							break;
-
-						case 'delete' :
-
-							wp_delete_user( $member->ID );
 
 							break;
 

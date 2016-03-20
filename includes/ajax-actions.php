@@ -12,16 +12,17 @@ function rcp_validate_discount_with_ajax() {
 		$return['full']  = false;
 		$subscription_id = isset( $_POST['subscription_id'] ) ? absint( $_POST['subscription_id'] ) : 0;
 
+		rcp_setup_registration( $subscription_id, $_POST['code'] );
 
 		if( rcp_validate_discount( $_POST['code'], $subscription_id ) ) {
 		
 			$code_details = rcp_get_discount_details_by_code( sanitize_text_field( $_POST['code'] ) );
-		
-			if( $code_details && $code_details->amount == 100 && $code_details->unit == '%' ) {
+
+			if( rcp_get_registration()->get_recurring_total() == 0 && rcp_get_registration()->get_total() == 0 ) {
 				// this is a 100% discount
 				
 				$return['full']   = true;
-	
+
 			}
 
 			$return['valid']  = true;
@@ -50,3 +51,29 @@ function rcp_load_gateway_fields() {
 }
 add_action( 'wp_ajax_rcp_load_gateway_fields', 'rcp_load_gateway_fields' );
 add_action( 'wp_ajax_nopriv_rcp_load_gateway_fields', 'rcp_load_gateway_fields' );
+
+/**
+ * Setup the registration details
+ *
+ * @since 2.5
+ */
+function rcp_calc_total_ajax() {
+	$return = array(
+		'valid' => false,
+		'total' => __( 'An error occurred, please refresh the page and try again.' ),
+	);
+
+	if ( ! rcp_is_registration() ) {
+		wp_send_json( $return );
+	}
+
+	ob_start();
+
+	rcp_get_template_part( 'register-total-details' );
+
+	$return['total'] = ob_get_clean();
+
+	wp_send_json( $return );
+}
+add_action( 'wp_ajax_rcp_calc_discount', 'rcp_calc_total_ajax' );
+add_action( 'wp_ajax_nopriv_rcp_calc_discount', 'rcp_calc_total_ajax' );

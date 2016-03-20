@@ -115,7 +115,6 @@ function rcp_members_page() {
 						<option value="mark-active"><?php _e( 'Mark as Active', 'rcp' ); ?></option>
 						<option value="mark-expired"><?php _e( 'Mark as Expired', 'rcp' ); ?></option>
 						<option value="mark-cancelled"><?php _e( 'Revoke Access', 'rcp' ); ?></option>
-						<option value="delete"><?php _e( 'Delete', 'rcp' ); ?></option>
 					</select>
 					<input type="text" class="rcp-datepicker" name="expiration" placeholder="<?php esc_attr_e( 'New Expiration Date', 'rcp' ); ?>" id="rcp-bulk-expiration" value=""/>
 					<input type="submit" id="rcp-submit-bulk-action" class="button action" value="<?php _e( 'Apply', 'rcp' ); ?>"/>
@@ -183,7 +182,7 @@ function rcp_members_page() {
 								<td><?php echo rcp_get_expiration_date($member->ID); ?></td>
 								<td><?php echo rcp_get_user_role($member->ID); ?></td>
 								<?php do_action('rcp_members_page_table_column', $member->ID); ?>
-								<td>								
+								<td>
 									<?php if( current_user_can( 'rcp_manage_members' ) ) : ?>
 										<a href="<?php echo esc_url( add_query_arg('edit_member', $member->ID, $current_page) ); ?>"><?php _e('Edit', 'rcp'); ?></a>
 										<?php if(isset($_GET['status']) && $_GET['status'] == 'cancelled') { ?>

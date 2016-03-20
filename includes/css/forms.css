@@ -43,7 +43,3 @@
 p.rcp_error { -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; border: 1px solid #c00; margin: 0 0 10px; padding: 4px; background: #ffebe8; color: #333; }
 p.rcp_success span, p.rcp_error span { margin: 0 !important; padding:10px; }
 p.rcp_success { -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; border: 1px solid #E6DB55; margin: 0 0 10px; padding: 4px; background: #FFFFE0; color: #333; }
-table.rcp-table { text-align: left; width: 100%; border: none; margin: 0 0 21px; }
-table.rcp-table th,
-table.rcp-table td { text-align: left; border: 1px solid #eee; color: #666; padding: 0.4em; font-size: 90%; }
-table.rcp-table th { background: #fafafa; font-weight: bold; }

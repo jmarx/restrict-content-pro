@@ -28,7 +28,7 @@ function rcp_settings_page() {
 		if ( ! isset( $_REQUEST['updated'] ) )
 			$_REQUEST['updated'] = false;
 		?>
-		
+
 		<h1><?php _e( 'Restrict Content Pro', 'rcp' ); ?></h1>
 		<h2 class="nav-tab-wrapper">
 			<a href="#general" class="nav-tab"><?php _e( 'General', 'rcp' ); ?></a>

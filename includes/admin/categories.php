@@ -14,6 +14,19 @@
 // Exit if accessed directly
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+/**
+ * Setup actions for taxonomy restricted fields
+ *
+ * @since 2.5
+ */
+function rcp_setup_taxonomy_edit_fields() {
+	$taxonomies = rcp_get_restricted_taxonomies();
+
+	foreach( $taxonomies as $taxonomy ) {
+		add_action( "{$taxonomy}_edit_form_fields", 'rcp_category_edit_meta_fields' );
+	}
+}
+add_action( 'admin_init', 'rcp_setup_taxonomy_edit_fields' );
 
 /**
  * Add restriction options to the edit category page
@@ -24,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 function rcp_category_edit_meta_fields( $term ) {
 	// retrieve the existing value(s) for this meta field. This returns an array
-	$term_meta = get_option( "rcp_category_meta_$term->term_id" );
+	$term_meta = rcp_get_term_restrictions( $term->term_id );
 	$access_level = isset( $term_meta['access_level'] ) ? absint( $term_meta['access_level'] ) : 0;
 	$subscription_levels = isset( $term_meta['subscriptions'] ) ? array_map( 'absint', $term_meta['subscriptions'] ) : array();
 	?>
@@ -65,7 +78,6 @@ function rcp_category_edit_meta_fields( $term ) {
 	</tr>
 <?php
 }
-add_action( 'category_edit_form_fields', 'rcp_category_edit_meta_fields', 10, 2 );
 
 /**
  * Save our custom category meta
@@ -74,9 +86,14 @@ add_action( 'category_edit_form_fields', 'rcp_category_edit_meta_fields', 10, 2 
  * @since       2.0
  * @return      void
  */
-function rcp_save_category_meta( $term_id ) {
+function rcp_save_category_meta( $term_id, $tt_id, $taxonomy ) {
 
-	if( ! check_admin_referer( 'rcp_edit_category', 'rcp_edit_category' ) ) {
+	if ( ! check_admin_referer( 'rcp_edit_category', 'rcp_edit_category' ) ) {
+		return;
+	}
+
+	$restricted_taxonomies = rcp_get_restricted_taxonomies();
+	if ( ! in_array( $taxonomy, $restricted_taxonomies ) ) {
 		return;
 	}
 
@@ -86,6 +103,13 @@ function rcp_save_category_meta( $term_id ) {
 		$fields['subscriptions'] = array_map( 'absint', array_keys( $_POST['rcp_category_meta']['subscriptions'] ) );
 	}
 
-	update_option( "rcp_category_meta_$term_id", $fields );
+	if ( function_exists( 'update_term_meta' ) && update_term_meta( $term_id, 'rcp_restricted_meta', $fields ) ) {
+		// remove deprecated data
+		delete_option( "rcp_category_meta_$term_id" );
+	} else {
+		// fallback to older method of handling term meta
+		update_option( "rcp_category_meta_$term_id", $fields );
+	}
+
 }
-add_action( 'edited_category', 'rcp_save_category_meta', 10, 2 );
+add_action( 'edited_term', 'rcp_save_category_meta', 10, 3 );

@@ -177,6 +177,68 @@ function rcp_registration_form( $atts, $content = null ) {
 }
 add_shortcode( 'register_form', 'rcp_registration_form' );
 
+/**
+ * Shortcode for displaying stripe checkout
+ *
+ * @since 2.5
+ * @param $atts
+ *
+ * @return mixed|void
+ */
+function rcp_register_form_stripe_checkout( $atts ) {
+	global $rcp_options;
+
+	if ( empty( $atts['id'] ) ) {
+		return '';
+	}
+
+	// button is an alias for data-label
+	if ( isset( $atts['button'] ) ) {
+		$atts['data-label'] = $atts['button'];
+	}
+
+	$key = ( isset( $rcp_options['sandbox'] ) ) ? $rcp_options['stripe_test_publishable'] : $rcp_options['stripe_live_publishable'];
+
+	$user         = wp_get_current_user();
+	$subscription = rcp_get_subscription_details( $atts['id'] );
+
+	$data = wp_parse_args( $atts, array(
+		'id'                     => 0,
+		'data-key'               => $key,
+		'data-name'              => get_option( 'blogname' ),
+		'data-description'       => $subscription->description,
+		'data-label'             => sprintf( __( 'Join %s', 'rcp' ), $subscription->name ),
+		'data-panel-label'       => __( 'Register - {{amount}}', 'rcp' ),
+		'data-amount'            => $subscription->price * rcp_stripe_get_currency_multiplier(),
+		'data-local'             => 'auto',
+		'data-allow-remember-me' => true,
+	) );
+
+	if ( empty( $data['data-email'] ) && ! empty( $user->user_email ) ) {
+		$data['data-email'] = $user->user_email;
+	}
+
+	if ( empty( $data['data-image'] ) && $image = get_site_icon_url() ) {
+		$data['data-image'] = $image;
+	}
+
+	$data = apply_filters( 'rcp_stripe_checkout_data', $data );
+
+	ob_start();
+	?>
+	<form action="" method="post">
+		<?php do_action( 'register_form_stripe_fields', $data ); ?>
+		<script src="https://checkout.stripe.com/checkout.js" class="stripe-button" <?php foreach( $data as $label => $value ) { printf( ' %s="%s" ', esc_attr( $label ), esc_attr( $value ) ); } ?> ></script>
+		<input type="hidden" name="rcp_level" value="<?php echo $subscription->id ?>" />
+		<input type="hidden" name="rcp_register_nonce" value="<?php echo wp_create_nonce('rcp-register-nonce' ); ?>"/>
+		<input type="hidden" name="rcp_gateway" value="stripe_checkout"/>
+	</form>
+	<?php
+
+	return apply_filters( 'register_form_stripe', ob_get_clean(), $atts );
+}
+add_shortcode( 'register_form_stripe', 'rcp_register_form_stripe_checkout' );
+
 // user login form
 function rcp_login_form( $atts, $content = null ) {
 
@@ -329,3 +391,52 @@ function rcp_update_billing_card_shortcode( $atts, $content = null ) {
 }
 add_shortcode( 'card_details', 'rcp_update_billing_card_shortcode' ); // Old version
 add_shortcode( 'rcp_update_card', 'rcp_update_billing_card_shortcode' );
+
+/**
+ * Show User's Subscription ID Shortcode
+ *
+ * @since 2.5
+ * @return string
+ */
+function rcp_user_subscription_id_shortcode() {
+	if ( ! is_user_logged_in() ) {
+		return '';
+	}
+
+	return rcp_get_subscription_id();
+}
+add_shortcode( 'subscription_id', 'rcp_user_subscription_id_shortcode' );
+
+/**
+ * Show User's Subscription ID Shortcode
+ *
+ * @since 2.5
+ * @return string
+ */
+function rcp_user_subscription_name_shortcode() {
+	if ( ! is_user_logged_in() ) {
+		return '';
+	}
+
+	if ( ! $id = rcp_get_subscription_id() ) {
+		return '';
+	}
+
+	return rcp_get_subscription_name( $id );
+}
+add_shortcode( 'subscription_name', 'rcp_user_subscription_name_shortcode' );
+
+/**
+ * Show User's Expiration Shortcode
+ *
+ * @since 2.5
+ * @return string
+ */
+function rcp_user_expiration_shortcode() {
+	if ( ! is_user_logged_in() ) {
+		return '';
+	}
+
+	return rcp_get_expiration_date();
+}
+add_shortcode( 'user_expiration', 'rcp_user_expiration_shortcode' );
